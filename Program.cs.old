@@ -13,9 +13,4 @@ var app = builder.Build();
 app.UseStaticFiles();
 app.MapControllers();
 app.MapFallbackToFile("index.html");
-
-// Railway / cloud hosting: read PORT from environment variable
-var port = Environment.GetEnvironmentVariable("PORT") ?? "5000";
-app.Urls.Add($"http://0.0.0.0:{port}");
-
 app.Run();
