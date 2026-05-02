@@ -1,0 +1,614 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Strip Test Report Generator</title>
+<style>
+  :root {
+    --bg:      #0f1117;
+    --panel:   #1a1e2b;
+    --card:    #21263a;
+    --border:  #373f5a;
+    --accent:  #4682d2;
+    --accent2: #7a55ea;
+    --text:    #d7dce8;
+    --sub:     #717999;
+    --ok:      #3cc78e;
+    --warn:    #f0aa28;
+    --err:     #e64b4b;
+    --pause:   #f0a828;
+    --stop:    #d23c3c;
+    --radius:  8px;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: "Segoe UI", system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ── Header ── */
+  header {
+    background: var(--panel);
+    padding: 0 24px;
+    height: 54px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    border-bottom: 2px solid transparent;
+    border-image: linear-gradient(90deg, var(--accent), var(--accent2)) 1;
+    flex-shrink: 0;
+  }
+  header h1 { font-size: 15px; font-weight: 700; letter-spacing: .3px; }
+  header .ver { font-size: 10px; color: var(--sub); margin-top: 2px; }
+
+  /* ── Layout ── */
+  .layout {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+  }
+
+  /* ── Side panel ── */
+  aside {
+    width: 290px;
+    flex-shrink: 0;
+    background: var(--panel);
+    border-right: 1px solid var(--border);
+    padding: 18px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    overflow-y: auto;
+  }
+
+  .section-label {
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--accent);
+    letter-spacing: 1px;
+    margin-bottom: 8px;
+  }
+
+  /* Drop zone */
+  #dropZone {
+    border: 2px dashed var(--border);
+    border-radius: var(--radius);
+    padding: 28px 16px;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color .2s, background .2s;
+  }
+  #dropZone:hover, #dropZone.drag-over {
+    border-color: var(--accent);
+    background: rgba(70,130,210,.07);
+  }
+  #dropZone .icon { font-size: 28px; margin-bottom: 8px; }
+  #dropZone p { font-size: 12px; color: var(--sub); line-height: 1.5; }
+  #dropZone strong { color: var(--text); }
+  #fileInput { display: none; }
+
+  /* Stat box */
+  #statBox {
+    background: var(--card);
+    border-radius: var(--radius);
+    padding: 12px;
+    font-size: 12px;
+    line-height: 1.9;
+    color: var(--sub);
+    min-height: 80px;
+  }
+  #statBox b { color: var(--text); }
+
+  /* Buttons */
+  .btn {
+    border: none;
+    border-radius: var(--radius);
+    padding: 0 16px;
+    height: 40px;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    color: #fff;
+    width: 100%;
+    transition: filter .15s;
+  }
+  .btn:hover:not(:disabled) { filter: brightness(1.15); }
+  .btn:active:not(:disabled) { filter: brightness(.88); }
+  .btn:disabled { opacity: .4; cursor: not-allowed; }
+  .btn-green  { background: var(--ok); }
+  .btn-pause  { background: var(--pause); }
+  .btn-stop   { background: var(--stop); }
+  .btn-accent { background: var(--accent); }
+
+  .btn-row { display: flex; gap: 8px; }
+  .btn-row .btn { flex: 1; }
+
+  /* Progress bar */
+  .progress-wrap {
+    height: 6px;
+    background: var(--card);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+  #progressBar {
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, var(--accent), var(--accent2));
+    border-radius: 3px;
+    transition: width .3s;
+  }
+
+  /* Status text */
+  #statusText {
+    font-size: 11px;
+    color: var(--sub);
+    min-height: 16px;
+  }
+
+  /* ── Main content ── */
+  main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    padding: 16px;
+    gap: 12px;
+  }
+
+  .section-label-main {
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--accent);
+    letter-spacing: 1px;
+  }
+
+  /* File table */
+  .table-wrap {
+    flex: 1;
+    overflow: auto;
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+    font-family: Consolas, monospace;
+  }
+
+  thead th {
+    background: var(--card);
+    padding: 8px 10px;
+    text-align: center;
+    font-weight: 700;
+    color: var(--sub);
+    font-size: 11px;
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    white-space: nowrap;
+    border-bottom: 1px solid var(--border);
+  }
+  thead th:first-child { text-align: left; }
+
+  tbody tr { border-bottom: 1px solid rgba(255,255,255,.04); }
+  tbody tr:hover { background: rgba(255,255,255,.03); }
+
+  td {
+    padding: 7px 10px;
+    text-align: center;
+    color: var(--sub);
+    white-space: nowrap;
+  }
+  td:first-child { text-align: left; color: var(--text); }
+
+  .badge {
+    display: inline-block;
+    padding: 1px 8px;
+    border-radius: 20px;
+    font-size: 10px;
+    font-weight: 700;
+  }
+  .badge-wait    { background:#2a2f44; color:var(--sub); }
+  .badge-proc    { background:#2d3a20; color:var(--warn); }
+  .badge-done    { background:#1a3828; color:var(--ok); }
+  .badge-error   { background:#3a1e1e; color:var(--err); }
+
+  /* Empty state */
+  #emptyState {
+    text-align: center;
+    padding: 60px;
+    color: var(--sub);
+    font-size: 13px;
+  }
+  #emptyState .big { font-size: 36px; margin-bottom: 12px; }
+
+  /* Status bar */
+  footer {
+    height: 30px;
+    background: var(--panel);
+    border-top: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    padding: 0 16px;
+    font-size: 11px;
+    color: var(--sub);
+    flex-shrink: 0;
+    gap: 12px;
+  }
+  #footerStatus { flex: 1; }
+
+  .spinner {
+    display: none;
+    width: 12px; height: 12px;
+    border: 2px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin .7s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Notification toast */
+  #toast {
+    position: fixed;
+    bottom: 40px; right: 24px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 12px 18px;
+    font-size: 13px;
+    box-shadow: 0 8px 32px rgba(0,0,0,.5);
+    transform: translateY(20px);
+    opacity: 0;
+    transition: all .3s;
+    pointer-events: none;
+    max-width: 340px;
+  }
+  #toast.show { opacity: 1; transform: none; }
+  #toast.ok   { border-color: var(--ok);  color: var(--ok); }
+  #toast.err  { border-color: var(--err); color: var(--err); }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>⬡ Strip Test Report Generator</h1>
+    <div class="ver">Web Edition</div>
+  </div>
+</header>
+
+<div class="layout">
+
+  <!-- ── Side panel ── -->
+  <aside>
+    <div>
+      <div class="section-label">LOG FILES</div>
+      <div id="dropZone">
+        <div class="icon">📂</div>
+        <p><strong>Click to browse</strong> or drag & drop<br>XLS / XLSX log files here</p>
+      </div>
+      <input type="file" id="fileInput" multiple accept=".xls,.xlsx" />
+    </div>
+
+    <div>
+      <div class="section-label">PROGRESS</div>
+      <div class="progress-wrap" style="margin-bottom:8px">
+        <div id="progressBar"></div>
+      </div>
+      <div id="statusText">Ready — upload log files to begin.</div>
+    </div>
+
+    <div>
+      <div class="section-label">SUMMARY</div>
+      <div id="statBox">—</div>
+    </div>
+
+    <div style="margin-top:auto; display:flex; flex-direction:column; gap:8px;">
+      <div class="btn-row" id="pauseStopRow" style="display:none!important">
+        <button class="btn btn-pause" id="btnPause" onclick="onPause()">⏸ Pause</button>
+        <button class="btn btn-stop"  id="btnStop"  onclick="onStop()">⏹ Stop</button>
+      </div>
+      <button class="btn btn-green" id="btnGenerate" onclick="onGenerate()">▶ Generate Report</button>
+    </div>
+  </aside>
+
+  <!-- ── Main area ── -->
+  <main>
+    <div class="section-label-main">UPLOADED FILES</div>
+
+    <div class="table-wrap">
+      <div id="emptyState">
+        <div class="big">⬡</div>
+        Upload XLS / XLSX log files to begin
+      </div>
+      <table id="fileTable" style="display:none">
+        <thead>
+          <tr>
+            <th>File</th>
+            <th>Status</th>
+            <th>Input</th>
+            <th>Output</th>
+            <th>Yield</th>
+            <th>VTH&lt;1.5V</th>
+            <th>VTH&gt;6V</th>
+            <th>Error</th>
+          </tr>
+        </thead>
+        <tbody id="fileTableBody"></tbody>
+      </table>
+    </div>
+  </main>
+</div>
+
+<footer>
+  <div class="spinner" id="spinner"></div>
+  <div id="footerStatus">Ready</div>
+</footer>
+
+<div id="toast"></div>
+
+<script>
+  // ── State ─────────────────────────────────────────────────────
+  let files      = [];   // { name, file } objects
+  let jobId      = null;
+  let isPaused   = false;
+  let eventSrc   = null;
+  let rowData    = [];   // processed results for summary
+
+  // ── Drop zone ─────────────────────────────────────────────────
+  const dropZone  = document.getElementById('dropZone');
+  const fileInput = document.getElementById('fileInput');
+
+  dropZone.addEventListener('click', () => fileInput.click());
+  dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+  dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+  dropZone.addEventListener('drop', e => {
+    e.preventDefault();
+    dropZone.classList.remove('drag-over');
+    addFiles([...e.dataTransfer.files]);
+  });
+  fileInput.addEventListener('change', () => addFiles([...fileInput.files]));
+
+  function addFiles(newFiles) {
+    const valid = newFiles.filter(f => {
+      const ext = f.name.split('.').pop().toLowerCase();
+      return (ext === 'xls' || ext === 'xlsx') && !f.name.startsWith('~$');
+    });
+    valid.forEach(f => {
+      if (!files.find(x => x.name === f.name))
+        files.push({ name: f.name, file: f });
+    });
+    renderTable();
+  }
+
+  function renderTable() {
+    const tbody = document.getElementById('fileTableBody');
+    const table = document.getElementById('fileTable');
+    const empty = document.getElementById('emptyState');
+
+    if (files.length === 0) {
+      table.style.display = 'none';
+      empty.style.display = 'block';
+      document.getElementById('statBox').textContent = '—';
+      return;
+    }
+
+    table.style.display = '';
+    empty.style.display = 'none';
+
+    tbody.innerHTML = files.map((f, i) => `
+      <tr id="row-${i}">
+        <td>${f.name}</td>
+        <td><span class="badge badge-wait">Ready</span></td>
+        <td>—</td><td>—</td><td>—</td><td>—</td><td>—</td>
+        <td style="color:var(--sub);font-size:11px;max-width:220px;overflow:hidden;text-overflow:ellipsis"></td>
+      </tr>`).join('');
+
+    document.getElementById('statBox').innerHTML =
+      `Files found: <b>${files.length}</b>`;
+  }
+
+  // ── Update a single table row ─────────────────────────────────
+  function updateRow(index, status, data) {
+    const row = document.getElementById(`row-${index}`);
+    if (!row) return;
+    const cells = row.querySelectorAll('td');
+
+    const badgeClass = { processing: 'badge-proc', done: 'badge-done', error: 'badge-error' }[status] || 'badge-wait';
+    const badgeText  = { processing: '⏳ Processing', done: '✓ Done', error: '✗ Error' }[status] || status;
+    cells[1].innerHTML = `<span class="badge ${badgeClass}">${badgeText}</span>`;
+
+    if (data) {
+      cells[2].textContent = data.input  ?? '—';
+      cells[3].textContent = data.output ?? '—';
+      cells[4].textContent = data.yield  != null ? (data.yield * 100).toFixed(2) + '%' : '—';
+      cells[5].textContent = data.vthLt15 ?? '—';
+      cells[6].textContent = data.vthGt6  ?? '—';
+      cells[7].textContent = data.error   ?? '';
+      cells[7].style.color = data.error ? 'var(--err)' : '';
+
+      if (status === 'error') {
+        row.style.background = 'rgba(230,75,75,.08)';
+        row.style.color = 'var(--err)';
+      } else if (status === 'done') {
+        row.style.background = 'rgba(60,199,142,.05)';
+      }
+    }
+  }
+
+  // ── Generate ──────────────────────────────────────────────────
+  async function onGenerate() {
+    if (files.length === 0) { showToast('Please upload log files first.', 'err'); return; }
+
+    // Reset table rows
+    files.forEach((_, i) => updateRow(i, 'wait', null));
+    rowData = [];
+    isPaused = false;
+    jobId = null;
+
+    setBusy(true);
+    setStatus('Uploading files…', 'var(--sub)');
+
+    const form = new FormData();
+    files.forEach(f => form.append('files', f.file, f.name));
+
+    let res;
+    try {
+      res = await fetch('/api/report/upload', { method: 'POST', body: form });
+    } catch (e) { setStatus('Upload failed: ' + e.message, 'var(--err)'); setBusy(false); return; }
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: res.statusText }));
+      setStatus('Error: ' + err.error, 'var(--err)');
+      setBusy(false);
+      return;
+    }
+
+    const { jobId: jid, count } = await res.json();
+    jobId = jid;
+    setProgress(0, count);
+    setStatus(`Processing 0 / ${count}…`, 'var(--sub)');
+    showPauseStop(true);
+
+    // Open SSE stream
+    eventSrc = new EventSource(`/api/report/stream/${jobId}`);
+    eventSrc.onmessage = e => handleMsg(JSON.parse(e.data), count);
+    eventSrc.onerror   = () => { eventSrc.close(); setBusy(false); showPauseStop(false); };
+  }
+
+  function handleMsg(msg, total) {
+    if (msg.type === 'progress' || msg.type === 'status') {
+      setStatus(msg.status ?? `Processing ${(msg.index ?? 0) + 1} / ${total}: ${msg.fileName ?? ''}`, 'var(--sub)');
+      if (msg.index != null) updateRow(msg.index, 'processing', null);
+    }
+    else if (msg.type === 'row') {
+      const r = msg.row;
+      updateRow(r.index, r.status, r);
+      if (r.status === 'done') rowData.push(r);
+      setProgress(r.index + 1, total);
+      setStatus(`Processed ${r.index + 1} / ${total}`, 'var(--sub)');
+      updateSummary();
+    }
+    else if (msg.type === 'done') {
+      // Auto-download
+      const blob = b64ToBlob(msg.data, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement('a');
+      a.href = url; a.download = msg.fileName; a.click();
+      URL.revokeObjectURL(url);
+
+      setStatus(`✓ Report saved: ${msg.fileName}  (${msg.count} lots)`, 'var(--ok)');
+      showToast(`✓ Report downloaded: ${msg.fileName}`, 'ok');
+      setProgress(total, total);
+      eventSrc.close();
+      setBusy(false);
+      showPauseStop(false);
+    }
+    else if (msg.type === 'error') {
+      setStatus('Error: ' + msg.status, 'var(--err)');
+      showToast('Error: ' + msg.status, 'err');
+      eventSrc.close();
+      setBusy(false);
+      showPauseStop(false);
+    }
+    else if (msg.type === 'end') {
+      eventSrc.close();
+      setBusy(false);
+      showPauseStop(false);
+    }
+  }
+
+  // ── Pause / Resume / Stop ─────────────────────────────────────
+  async function onPause() {
+    if (!jobId) return;
+    if (!isPaused) {
+      await fetch(`/api/report/pause/${jobId}`,  { method: 'POST' });
+      isPaused = true;
+      document.getElementById('btnPause').textContent = '▶ Resume';
+      document.getElementById('btnPause').style.background = 'var(--ok)';
+    } else {
+      await fetch(`/api/report/resume/${jobId}`, { method: 'POST' });
+      isPaused = false;
+      document.getElementById('btnPause').textContent = '⏸ Pause';
+      document.getElementById('btnPause').style.background = 'var(--pause)';
+    }
+  }
+
+  async function onStop() {
+    if (!jobId) return;
+    await fetch(`/api/report/stop/${jobId}`, { method: 'POST' });
+    setStatus('⏹ Stopped by user.', 'var(--err)');
+    showPauseStop(false);
+    setBusy(false);
+    if (eventSrc) eventSrc.close();
+  }
+
+  // ── UI helpers ────────────────────────────────────────────────
+  function setStatus(msg, color) {
+    document.getElementById('statusText').textContent   = msg;
+    document.getElementById('footerStatus').textContent = msg;
+    if (color) document.getElementById('statusText').style.color = color;
+  }
+
+  function setProgress(done, total) {
+    document.getElementById('progressBar').style.width =
+      total > 0 ? `${(done / total * 100).toFixed(1)}%` : '0%';
+  }
+
+  function setBusy(busy) {
+    document.getElementById('spinner').style.display       = busy ? 'block' : 'none';
+    document.getElementById('btnGenerate').disabled        = busy;
+  }
+
+  function showPauseStop(show) {
+    document.getElementById('pauseStopRow').style.display = show ? 'flex' : 'none';
+    if (!show) {
+      document.getElementById('btnPause').textContent = '⏸ Pause';
+      document.getElementById('btnPause').style.background = 'var(--pause)';
+      isPaused = false;
+    }
+  }
+
+  function updateSummary() {
+    const total  = rowData.length;
+    const inp    = rowData.reduce((s, r) => s + (r.input  ?? 0), 0);
+    const out    = rowData.reduce((s, r) => s + (r.output ?? 0), 0);
+    const yld    = inp > 0 ? (out / inp * 100).toFixed(2) : '—';
+    const lt15   = rowData.reduce((s, r) => s + (r.vthLt15 ?? 0), 0);
+    const gt6    = rowData.reduce((s, r) => s + (r.vthGt6  ?? 0), 0);
+    document.getElementById('statBox').innerHTML =
+      `Files: <b>${files.length}</b><br>` +
+      `Done : <b>${total}</b><br>` +
+      `Input: <b>${inp.toLocaleString()}</b><br>` +
+      `Output:<b>${out.toLocaleString()}</b><br>` +
+      `Yield: <b>${yld}%</b><br>` +
+      `VTH&lt;1.5V: <b>${lt15}</b> / VTH&gt;6V: <b>${gt6}</b>`;
+  }
+
+  function b64ToBlob(b64, mime) {
+    const bin  = atob(b64);
+    const buf  = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i);
+    return new Blob([buf], { type: mime });
+  }
+
+  let toastTimer;
+  function showToast(msg, type) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.className = 'show ' + (type || '');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => t.className = '', 4000);
+  }
+</script>
+</body>
+</html>
