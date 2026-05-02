@@ -1,0 +1,8 @@
+[phases.setup]
+nixPkgs = ["dotnet-sdk"]
+
+[phases.build]
+cmds = ["dotnet publish -c Release -o /app/out"]
+
+[start]
+cmd = "dotnet /app/out/StripTestWeb.dll"
