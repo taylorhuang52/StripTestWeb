@@ -1,8 +1,1 @@
-[phases.setup]
-nixPkgs = ["dotnet-sdk"]
-
-[phases.build]
-cmds = ["dotnet publish -c Release -o /app/out"]
-
-[start]
-cmd = "dotnet /app/out/StripTestWeb.dll"
+# Using Dockerfile instead of nixpacks (Railway nixpacks only has .NET 6)
